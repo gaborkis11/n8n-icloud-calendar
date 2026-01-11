@@ -1,0 +1,56 @@
+{
+  "name": "Calendar Read Sub-Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"date\": \"2024-01-15\",\n  \"calendar\": \"personal\"\n}"
+      },
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// CONFIGURATION - REPLACE WITH YOUR VALUES!\n// ============================================\nconst USER_ID = 'YOUR_USER_ID';  // From 1_get_user_id.py\nconst CALENDARS = {\n  'personal': 'YOUR_CALENDAR_ID',  // From 2_get_calendar_id.py\n  // Add more calendars if needed:\n  // 'work': 'ANOTHER_CALENDAR_ID',\n};\nconst EMAIL = 'YOUR_APPLE_ID@email.com';\nconst PASSWORD = 'xxxx-xxxx-xxxx-xxxx';  // App-specific password\n// ============================================\n\n// Null-safe input handling\nconst inputData = $input.first().json;\nconst date = inputData.date || new Date().toISOString().split('T')[0];\nconst calendarName = (inputData.calendar || 'personal').toLowerCase();\nconst calendarId = CALENDARS[calendarName] || CALENDARS['personal'];\n\n// Debug log\nconsole.log('Input:', JSON.stringify(inputData));\nconsole.log('Date:', date, 'Calendar:', calendarName);\n\nconst startDate = date.replace(/-/g, '') + 'T000000Z';\nconst endDate = date.replace(/-/g, '') + 'T235959Z';\n\nconst xmlBody = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<c:calendar-query xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">\n  <d:prop>\n    <d:getetag/>\n    <c:calendar-data/>\n  </d:prop>\n  <c:filter>\n    <c:comp-filter name=\"VCALENDAR\">\n      <c:comp-filter name=\"VEVENT\">\n        <c:time-range start=\"${startDate}\" end=\"${endDate}\"/>\n      </c:comp-filter>\n    </c:comp-filter>\n  </c:filter>\n</c:calendar-query>`;\n\nconst url = `https://caldav.icloud.com/${USER_ID}/calendars/${calendarId}/`;\nconst authHeader = 'Basic ' + Buffer.from(`${EMAIL}:${PASSWORD}`).toString('base64');\n\ntry {\n  const response = await this.helpers.httpRequest({\n    method: 'REPORT',\n    url: url,\n    headers: {\n      'Content-Type': 'application/xml; charset=utf-8',\n      'Depth': '1',\n      'Authorization': authHeader\n    },\n    body: xmlBody,\n    returnFullResponse: true\n  });\n\n  const text = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);\n  \n  // Parse VEVENT blocks\n  const events = [];\n  const veventPattern = /BEGIN:VEVENT([\\s\\S]*?)END:VEVENT/g;\n  let match;\n  \n  while ((match = veventPattern.exec(text)) !== null) {\n    const eventData = match[1];\n    \n    const summaryMatch = eventData.match(/SUMMARY[^:]*:(.+)/);\n    const dtstartMatch = eventData.match(/DTSTART[^:]*(:\\d{8}T?\\d{0,6})/);\n    \n    const summary = summaryMatch ? summaryMatch[1].trim() : 'Untitled';\n    let timeStr = 'All day';\n    \n    if (dtstartMatch) {\n      const dtstart = dtstartMatch[1].replace(':', '');\n      if (dtstart.includes('T') && dtstart.length >= 13) {\n        timeStr = dtstart.substring(9, 11) + ':' + dtstart.substring(11, 13);\n      }\n    }\n    \n    events.push({ time: timeStr, title: summary });\n  }\n  \n  // Sort by time\n  events.sort((a, b) => {\n    const timeA = a.time === 'All day' ? '00:00' : a.time;\n    const timeB = b.time === 'All day' ? '00:00' : b.time;\n    return timeA.localeCompare(timeB);\n  });\n  \n  let result;\n  if (events.length === 0) {\n    result = `No events on ${date} in ${calendarName} calendar.`;\n  } else {\n    result = `Events for ${date} (${calendarName}):\\n` + \n             events.map(e => `- ${e.time}: ${e.title}`).join('\\n');\n  }\n  \n  return [{ json: { result: result, events: events, calendar: calendarName, date: date } }];\n  \n} catch (error) {\n  return [{ json: { result: `Error: ${error.message}`, error: true } }];\n}"
+      },
+      "id": "code-caldav",
+      "name": "CalDAV Read",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "CalDAV Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}

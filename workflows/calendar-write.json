@@ -1,0 +1,56 @@
+{
+  "name": "Calendar Write Sub-Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"title\": \"Meeting\",\n  \"date\": \"2024-01-15\",\n  \"startTime\": \"10:00\",\n  \"endTime\": \"11:00\",\n  \"calendar\": \"personal\"\n}"
+      },
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// CONFIGURATION - REPLACE WITH YOUR VALUES!\n// ============================================\nconst USER_ID = 'YOUR_USER_ID';  // From 1_get_user_id.py\nconst CALENDARS = {\n  'personal': 'YOUR_CALENDAR_ID',  // From 2_get_calendar_id.py\n  // Add more calendars if needed:\n  // 'work': 'ANOTHER_CALENDAR_ID',\n};\nconst EMAIL = 'YOUR_APPLE_ID@email.com';\nconst PASSWORD = 'xxxx-xxxx-xxxx-xxxx';  // App-specific password\n// ============================================\n\nconst input = $input.first().json;\nconst title = input.title;\nconst date = input.date;\nconst startTime = input.startTime;\nconst endTime = input.endTime;\nconst calendarName = (input.calendar || 'personal').toLowerCase();\nconst calendarId = CALENDARS[calendarName] || CALENDARS['personal'];\n\nconst eventUid = `n8n-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;\n\n// Date conversion to YYYYMMDDTHHMMSSZ format\nconst dateClean = date.replace(/-/g, '');\nconst startClean = startTime.replace(/:/g, '');\nconst endClean = endTime.replace(/:/g, '');\nconst dtstart = `${dateClean}T${startClean}00Z`;\nconst dtend = `${dateClean}T${endClean}00Z`;\nconst dtstamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';\n\nconst icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//n8n Calendar Integration//EN\nCALSCALE:GREGORIAN\nBEGIN:VEVENT\nUID:${eventUid}\nDTSTAMP:${dtstamp}\nDTSTART:${dtstart}\nDTEND:${dtend}\nSUMMARY:${title}\nEND:VEVENT\nEND:VCALENDAR`;\n\nconst url = `https://caldav.icloud.com/${USER_ID}/calendars/${calendarId}/${eventUid}.ics`;\nconst authHeader = 'Basic ' + Buffer.from(`${EMAIL}:${PASSWORD}`).toString('base64');\n\ntry {\n  const response = await this.helpers.httpRequest({\n    method: 'PUT',\n    url: url,\n    headers: {\n      'Content-Type': 'text/calendar; charset=utf-8',\n      'Authorization': authHeader\n    },\n    body: icsContent,\n    returnFullResponse: true\n  });\n\n  if (response.statusCode === 201 || response.statusCode === 204) {\n    const result = `Event created successfully in ${calendarName} calendar:\\n- Title: ${title}\\n- Date: ${date}\\n- Time: ${startTime} - ${endTime}\\n\\nThe event should now appear in your Calendar app.`;\n    return [{ json: { result: result, success: true, calendar: calendarName, eventUid: eventUid } }];\n  } else {\n    return [{ json: { result: `Error creating event: ${response.statusCode}`, success: false } }];\n  }\n  \n} catch (error) {\n  return [{ json: { result: `Error: ${error.message}`, success: false, error: true } }];\n}"
+      },
+      "id": "code-caldav-write",
+      "name": "CalDAV Write",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "CalDAV Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": []
+}
