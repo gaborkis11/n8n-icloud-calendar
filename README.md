@@ -55,7 +55,7 @@ Your Workflow (or AI Agent)
 
 > **Important:** This is NOT your Apple ID password. You must generate a new app-specific password.
 
-See [docs/setup-app-password.md](docs/setup-app-password.md) for detailed instructions with screenshots.
+See [docs/setup-app-password.md](docs/setup-app-password.md) for detailed instructions.
 
 ### Step 2: Get Your USER_ID
 
