@@ -178,4 +178,4 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ---
 
-**Note:** This project is not affiliated with Apple Inc. or n8n GmbH. iCloud is a trademark of Apple Inc.
+
